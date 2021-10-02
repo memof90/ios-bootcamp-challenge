@@ -35,6 +35,7 @@ class ListViewController: UICollectionViewController {
         // Do any additional setup after loading the view.
         setup()
         setupUI()
+        setupSearchBar()
     }
 
     // MARK: Setup
@@ -72,25 +73,55 @@ class ListViewController: UICollectionViewController {
     }
 
     // MARK: - UISearchViewController
+    
+    //    timer to reload data
+        var timer: Timer?
 
     private func filterContentForSearchText(_ searchText: String) {
-        // filter with a simple contains searched text
-        resultPokemons = pokemons
-            .filter {
-                searchText.isEmpty || $0.name.lowercased().contains(searchText.lowercased())
-            }
-            .sorted {
-                $0.id < $1.id
-            }
+        //        Introduce some delay before performing the searh
+        //        throttling the search
+                timer?.invalidate()
+        
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { (_) in
+            // filter with a simple contains searched text
+            resultPokemons = pokemons
+                .filter {
+                    searchText.isEmpty || $0.name.lowercased().contains(searchText.lowercased())
+                }
+                .sorted {
+                    $0.id < $1.id
+                }
 
-        collectionView.reloadData()
+                collectionView.reloadData()
+            })
     }
 
     // TODO: Implement the SearchBar
+    
+    //   MARK: - SearchBar Message to the data not appareance
+        fileprivate let searchController = UISearchController(searchResultsController: nil)
+        fileprivate let enterSearchTermLabel: UILabel = {
+                let label = UILabel()
+                label.text  = "Please enter your movie Search"
+            label.textAlignment = .center
+            label.font = UIFont.boldSystemFont(ofSize: 20)
+            return label
+        }()
+    
+    //    MARK: - setupSearchBar
+        fileprivate func setupSearchBar() {
+            definesPresentationContext = true
+            navigationItem.searchController = self.searchController
+            navigationItem.hidesSearchBarWhenScrolling = false
+            searchController.obscuresBackgroundDuringPresentation = false
+            searchController.searchBar.delegate = self
+        }
 
     // MARK: - UICollectionViewDataSource
 
     override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        //        saw data before dont load data
+        enterSearchTermLabel.isHidden =  resultPokemons.count != 0
         return resultPokemons.count
     }
 
@@ -105,6 +136,16 @@ class ListViewController: UICollectionViewController {
     // MARK: - Navigation
 
     // TODO: Handle navigation to detail view controller
+    
+    override func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        guard let pokenmos = resultPokemons[indexPath.item] else {return }
+        let Controller = DetailViewController()
+        Controller.navigationItem.title = pokenmos.name.capitalized
+        Controller.pokemon = pokenmos
+        
+        navigationController?.pushViewController(Controller, animated: true)
+        
+    }
 
     // MARK: - UI Hooks
 
@@ -121,8 +162,11 @@ class ListViewController: UICollectionViewController {
                 PokeAPI.shared.get(url: "/pokemon/\(result.id)/", onCompletion: { (pokemon: Pokemon?, _) in
                     guard let pokemon = pokemon else { return }
                     pokemons.append(pokemon)
-                    self.pokemons = pokemons
-                    self.didRefresh()
+                    DispatchQueue.main.async {
+                        self.pokemons = pokemons
+                        self.didRefresh()
+                        self.collectionView.reloadData()
+                    }
                 })
             }
         })
